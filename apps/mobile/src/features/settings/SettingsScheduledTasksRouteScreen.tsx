@@ -85,6 +85,7 @@ import {
 } from "./scheduled-task-editor-state";
 import { appAtomRegistry } from "../../state/atom-registry";
 import {
+  formatMissedScheduledTaskRun,
   formatNextScheduledTaskRun,
   formatScheduledTaskInterval,
 } from "./scheduledTaskPresentation";
@@ -1357,7 +1358,11 @@ function EnvironmentTasks({
                     ? ` · ${formatNextScheduledTaskRun(task.nextRunAt, now)}`
                     : ""}
               </Text>
-              {task.lastRunError ? (
+              {task.missedRunAt !== undefined ? (
+                <Text className="text-sm text-warning-foreground" numberOfLines={2}>
+                  {formatMissedScheduledTaskRun(task.missedRunAt, now)}
+                </Text>
+              ) : task.lastRunError ? (
                 <Text className="text-sm text-danger-foreground" numberOfLines={2}>
                   Last run failed: {task.lastRunError}
                 </Text>

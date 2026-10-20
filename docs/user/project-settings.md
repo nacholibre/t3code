@@ -76,6 +76,15 @@ Webhook tasks only run when their URL is called, so they can't be run
 immediately.
 Leaving an edited form asks before discarding unsaved changes.
 
+## Missed runs
+
+A task set to **At a time** only runs while its environment is running. If the
+environment was off or asleep at that time and comes back more than 10 minutes
+later, the run is skipped rather than started late. **Settings → Scheduled
+tasks** then shows the run it missed until the task next runs, and web and
+desktop notify you once, following your notification settings. Use **Run now**
+to make up for it.
+
 ## Webhook automations
 
 In **Settings → Scheduled tasks**, choose **On webhook**

@@ -16,7 +16,11 @@ import {
 
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { cn } from "../../lib/utils";
-import { ScheduledRelativeLabel, scheduleLabel } from "../settings/ScheduledTasksSettings";
+import {
+  MissedRunLabel,
+  ScheduledRelativeLabel,
+  scheduleLabel,
+} from "../settings/ScheduledTasksSettings";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -41,6 +45,12 @@ function taskScheduleLine(task: ScheduledTask) {
   return (
     <>
       {scheduleLabel(task.schedule)}
+      {task.missedRunAt !== undefined ? (
+        <>
+          {" · missed "}
+          <MissedRunLabel value={task.missedRunAt} />
+        </>
+      ) : null}
       {task.enabled && task.nextRunAt !== null ? (
         <>
           {" · next "}
@@ -173,7 +183,9 @@ export function ThreadAutomationsPanel(props: {
               <span
                 className={cn(
                   "absolute -right-1 -top-1 size-1.5 rounded-full",
-                  STATUS_DOT_CLASS[task.lastRunStatus],
+                  task.missedRunAt !== undefined
+                    ? "bg-warning"
+                    : STATUS_DOT_CLASS[task.lastRunStatus],
                 )}
                 aria-hidden
               />

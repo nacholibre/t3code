@@ -55,3 +55,22 @@ export function formatNextScheduledTaskRun(nextRunAt: string, now: number): stri
   });
   return `Next run ${date} at ${time}`;
 }
+
+export function formatMissedScheduledTaskRun(missedRunAt: string, now: number): string {
+  const missed = new Date(missedRunAt);
+  if (!Number.isFinite(missed.getTime())) return "Missed a run";
+  const current = new Date(now);
+  const time = missed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = localCalendarDay(current) - localCalendarDay(missed);
+  const when =
+    days === 0
+      ? `today at ${time}`
+      : days === 1
+        ? `yesterday at ${time}`
+        : `${missed.toLocaleDateString([], {
+            month: "short",
+            day: "numeric",
+            ...(missed.getFullYear() !== current.getFullYear() ? { year: "numeric" as const } : {}),
+          })} at ${time}`;
+  return `Missed the run due ${when}: the environment wasn't running`;
+}

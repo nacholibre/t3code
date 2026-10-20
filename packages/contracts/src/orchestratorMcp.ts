@@ -602,6 +602,10 @@ export const OrchestratorMcpScheduledTask = Schema.Struct({
   schedule: ScheduledTaskSchedule,
   nextRunAt: Schema.NullOr(IsoDateTime),
   lastRunStatus: ScheduledTaskRunStatus,
+  missedRunAt: Schema.optional(IsoDateTime).annotate({
+    description:
+      "Due time of a timed run skipped because the environment was down. Cleared on the next run.",
+  }),
   webhookUrl: Schema.optional(Schema.String).annotate({
     description:
       "Public URL for the sender. Absent: no T3 Connect tunnel. The user must enable T3 Connect remote access.",

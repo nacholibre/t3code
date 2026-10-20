@@ -3,8 +3,10 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { expect, it } from "@effect/vitest";
 import { ScheduledTaskUpsertInput } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 
@@ -165,5 +167,86 @@ it.effect("keeps the task list order when a toggle or edit rewrites updated_at",
       yield* service.upsert(yield* decodeUpsertInput({ ...edit, enabled: false }));
       expect(yield* listedIds).toEqual(order);
     }).pipe(Effect.provide(ScheduledTaskService.layer.pipe(Layer.provide(layerDependencies))));
+  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
+);
+
+it.effect("records a timed run the environment missed and clears it when the task next runs", () =>
+  Effect.gen(function* () {
+    const at = (hour: number, minute: number) =>
+      DateTime.makeZonedUnsafe(
+        { year: 2026, month: 7, day: 1, hour, minute, second: 0, millisecond: 0 },
+        { timeZone: DateTime.zoneMakeLocal(), adjustForTimeZone: true },
+      );
+    const isoAt = (value: DateTime.DateTime) => DateTime.formatIso(DateTime.toUtc(value));
+    yield* TestClock.setTime(DateTime.toEpochMillis(at(8, 59)));
+
+    const launches = yield* Ref.make<ReadonlyArray<string>>([]);
+    const onTimeLaunched = yield* Deferred.make<void>();
+    const serviceLayer = ScheduledTaskService.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          NodeCrypto.layer,
+          Scheduler.layer,
+          Layer.mock(ThreadLaunchService.ThreadLaunchService)({
+            launch: (input) =>
+              Ref.update(launches, (titles) => [...titles, input.title]).pipe(
+                Effect.andThen(Deferred.succeed(onTimeLaunched, undefined)),
+                Effect.andThen(Effect.die(new Error("test launch failure"))),
+              ),
+          }),
+          Layer.mock(ManagedProjectFolders.ManagedProjectFolders)({
+            namedProjectsRoot: "/projects",
+            isScratchProject: () => Effect.succeed(false),
+          }),
+          Layer.mock(ThreadManagementService.ThreadManagementService)({}),
+          Layer.mock(SecretRequests.SecretRequests)({}),
+        ),
+      ),
+    );
+
+    const missed = yield* Effect.gen(function* () {
+      const service = yield* ScheduledTaskService.ScheduledTaskService;
+      const save = (title: string, timeOfDay: string) =>
+        decodeUpsertInput({
+          title,
+          prompt: "Write the report.",
+          enabled: true,
+          schedule: { type: "fixed_time", timeOfDay },
+          projectId: "project-missed-run",
+          workspaceStrategy: { type: "root" },
+          modelSelection: { instanceId: "codex", model: "gpt-5.4" },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        }).pipe(Effect.flatMap(service.upsert));
+      const created = yield* save("Missed report", "09:00");
+      // Due 5 minutes before the server is back, so it still runs. The poll
+      // reaches it after the missed task, which marks that pass as done.
+      yield* save("On-time report", "09:30");
+      return created.task;
+    }).pipe(Effect.provide(serviceLayer));
+
+    // The server is down from 08:59 until 09:35.
+    yield* TestClock.setTime(DateTime.toEpochMillis(at(9, 35)));
+
+    yield* Effect.gen(function* () {
+      const service = yield* ScheduledTaskService.ScheduledTaskService;
+      yield* TestClock.adjust("6 seconds");
+      yield* Deferred.await(onTimeLaunched);
+
+      const afterOutage = (yield* service.list()).tasks.find((task) => task.id === missed.id);
+      expect(afterOutage).toMatchObject({
+        missedRunAt: isoAt(at(9, 0)),
+        nextRunAt: isoAt(DateTime.add(at(9, 0), { days: 1 })),
+        lastRunStatus: "never",
+        runCount: 0,
+      });
+      expect(yield* Ref.get(launches)).toEqual(["On-time report"]);
+
+      const rerun = yield* service.runNow({ id: missed.id });
+      expect(rerun.task.missedRunAt).toBeUndefined();
+      const listed = (yield* service.list()).tasks.find((task) => task.id === missed.id);
+      expect(listed?.missedRunAt).toBeUndefined();
+      expect(listed?.lastRunStatus).toBe("failed");
+    }).pipe(Effect.provide(serviceLayer));
   }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );

@@ -28,6 +28,7 @@ import {
   threadNotificationTag,
   unlockNotificationAudio,
 } from "../threadNotifications";
+import { watchMissedScheduledRuns } from "./MissedScheduledRunNotifications";
 import { resolveSidebarThreadStatus, type SidebarThreadStatus } from "./Sidebar.logic";
 import {
   createThreadNotificationGate,
@@ -243,8 +244,15 @@ export function startThreadNotifications(
       },
       { immediate: true },
     );
+    const unsubscribeMissedRuns = watchMissedScheduledRuns(
+      registry,
+      router,
+      environmentId,
+      trackNotification,
+    );
     entry.unsubscribe = () => {
       unsubscribeShell();
+      unsubscribeMissedRuns();
       entry.gate.clear();
     };
     return entry;

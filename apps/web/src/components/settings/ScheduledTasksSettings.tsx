@@ -45,8 +45,8 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 
-import { formatRelativeTime } from "../../timestampFormat";
-import { useEnvironmentSettings } from "../../hooks/useSettings";
+import { formatDayAwareTimestamp, formatRelativeTime } from "../../timestampFormat";
+import { useEnvironmentSettings, usePrimarySettings } from "../../hooks/useSettings";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
 import {
   applyProviderInstanceSettings,
@@ -325,6 +325,13 @@ function relativeLabel(value: string | null, nowMs: number): string {
 export function ScheduledRelativeLabel(props: { value: string | null }) {
   const nowMinute = useNowMinute();
   return relativeLabel(props.value, Date.parse(`${nowMinute}:00.000Z`));
+}
+
+/** When a skipped run was due, such as "yesterday at 9:00 AM". */
+export function MissedRunLabel(props: { value: string }) {
+  const nowMinute = useNowMinute();
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  return formatDayAwareTimestamp(props.value, timestampFormat, Date.parse(`${nowMinute}:00.000Z`));
 }
 
 function deliveryOutcomeVariant(outcome: string) {
@@ -743,10 +750,24 @@ function ScheduledTaskRow({
               "Not scheduled"
             )}
           </span>
-          {task.lastRunStatus !== "never" ? (
-            <Badge variant={statusVariant(task.lastRunStatus)}>{task.lastRunStatus}</Badge>
-          ) : null}
-          {task.lastRunError ? <span className="text-destructive">{task.lastRunError}</span> : null}
+          {task.missedRunAt !== undefined ? (
+            <>
+              <Badge variant="warning">missed</Badge>
+              <span className="text-warning-foreground">
+                The run due <MissedRunLabel value={task.missedRunAt} /> didn't happen because the
+                environment wasn't running.
+              </span>
+            </>
+          ) : (
+            <>
+              {task.lastRunStatus !== "never" ? (
+                <Badge variant={statusVariant(task.lastRunStatus)}>{task.lastRunStatus}</Badge>
+              ) : null}
+              {task.lastRunError ? (
+                <span className="text-destructive">{task.lastRunError}</span>
+              ) : null}
+            </>
+          )}
         </div>
       }
       control={

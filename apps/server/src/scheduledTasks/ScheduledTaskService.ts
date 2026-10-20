@@ -202,6 +202,7 @@ interface ScheduledTaskRow {
   readonly last_run_status: string;
   readonly last_run_error: string | null;
   readonly run_count: number;
+  readonly missed_run_at: string | null;
   readonly webhook_token: string | null;
   readonly webhook_secret: string | null;
 }
@@ -342,6 +343,7 @@ const decodeRow = Effect.fnUntraced(
       lastRunStatus: row.last_run_status,
       lastRunError: row.last_run_error,
       runCount: row.run_count,
+      ...(row.missed_run_at === null ? {} : { missedRunAt: row.missed_run_at }),
       ...(webhook === undefined ? {} : { webhook }),
     });
   },
@@ -445,6 +447,7 @@ export const layer = Layer.effect(
         last_run_status,
         last_run_error,
         run_count,
+        missed_run_at,
         webhook_token,
         webhook_secret
       FROM scheduled_tasks
@@ -482,6 +485,7 @@ export const layer = Layer.effect(
         last_run_status,
         last_run_error,
         run_count,
+        missed_run_at,
         webhook_token,
         webhook_secret
       FROM scheduled_tasks
@@ -642,7 +646,8 @@ export const layer = Layer.effect(
             last_run_at = ${startedAtIso},
             last_run_webhook_delivery_id = ${webhookDeliveryId ?? null},
             last_run_status = 'running',
-            last_run_error = NULL
+            last_run_error = NULL,
+            missed_run_at = NULL
         WHERE task_id = ${id}
         RETURNING task_id
       `.pipe(
@@ -929,6 +934,7 @@ export const layer = Layer.effect(
       yield* sql`
         UPDATE scheduled_tasks
         SET next_run_at = ${next},
+            missed_run_at = ${task.nextRunAt},
             updated_at = ${iso(now)}
         WHERE task_id = ${task.id}
       `.pipe(

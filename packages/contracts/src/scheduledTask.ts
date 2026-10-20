@@ -215,6 +215,10 @@ export const ScheduledTask = Schema.Struct({
   lastRunStatus: ScheduledTaskRunStatus,
   lastRunError: Schema.NullOr(Schema.String),
   runCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  missedRunAt: Schema.optional(IsoDateTime).annotate({
+    description:
+      "Due time of a timed run skipped because the environment was down. Cleared on the next run.",
+  }),
   webhook: Schema.optional(ScheduledTaskWebhookEndpoint),
 });
 export type ScheduledTask = typeof ScheduledTask.Type;
